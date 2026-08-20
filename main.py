@@ -31,7 +31,7 @@ import random
 import statistics
 import sys
 import time
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Callable
 
