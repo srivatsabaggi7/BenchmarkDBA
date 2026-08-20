@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import benchmarkData from '../../benchmark_results.json'
 
 const databaseColors = ['#9d7bff', '#57d9c4', '#e9a65d', '#f57caa', '#77a7ff', '#c8d66a']
 const chartGrid = '#303649'
@@ -54,7 +55,7 @@ function Charts({ databases }) {
 }
 
 export default function App() {
-  const [data, setData] = useState()
+  const [data] = useState(benchmarkData)
   const [page, setPage] = useState('home')
   const [busy, setBusy] = useState(false)
   const [logsOpen, setLogsOpen] = useState(false)
@@ -62,7 +63,6 @@ export default function App() {
   const [filter, setFilter] = useState('All')
   const [expanded, setExpanded] = useState()
 
-  useEffect(() => { fetch('/results.json').then((response) => response.json()).then(setData) }, [])
   const databases = useMemo(() => (data?.databases || data?.platforms || []).map((platform, index) => {
     const concurrency = platform.concurrency || []
     return {
