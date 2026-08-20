@@ -33,7 +33,7 @@ Every graph database in this comparison received the same dataset, the same logi
 
 
 ## 3. Dataset
-*   **Source:** `data/nodes.csv` and `data/relationships.csv` 
+*   **Source:** SNAP - Epinions social network (https://snap.stanford.edu/data/soc-Epinions1.html) (Local files: `data/nodes.csv` and `data/relationships.csv`)
 *   **Nodes:** 47,000 
 *   **Relationships:** 160,000 
 *   **Sampling method:** Static flat-file loading in batches of 1,000 
@@ -123,8 +123,8 @@ Every graph database in this comparison received the same dataset, the same logi
 
 ## 8. Reproducibility
 ```bash
-git clone <your-repo-url>
-cd <repo-name>
+git clone https://github.com/srivatsabaggi7/BenchmarkDBA/
+cd BenchmarkDBA
 cp .env.example .env
 
 # fill in your own free-tier credentials for CognoDB, AuraDB, TigerGraph (if retrying) — never commit real values
