@@ -14,6 +14,7 @@ write_query / ingestion) is implemented once here.
 
 from __future__ import annotations
 
+import gc
 import logging
 import time
 from collections import deque
@@ -222,6 +223,10 @@ class _Neo4jStyleAdapter(BaseGraphAdapter):
         except ServiceUnavailable as exc:
             self._safe_close_driver()
             raise ConnectionError(f"Unreachable {self.platform_name}: {exc}") from exc
+        except Exception:
+            # Do not let a partially opened driver survive a failed handshake.
+            self._safe_close_driver()
+            raise
 
         # Try to peek the version via the user's session info
         try:
@@ -252,13 +257,18 @@ class _Neo4jStyleAdapter(BaseGraphAdapter):
         self._safe_close_driver()
 
     def _safe_close_driver(self) -> None:
-        if self._driver is not None:
+        driver = self._driver
+        # Clear our reference first so a failed close cannot leave this adapter
+        # reusing a connection with an exported PackStream buffer.
+        self._driver = None
+        if driver is not None:
             try:
-                self._driver.close()
+                driver.close()
             except Exception:
                 pass
             finally:
-                self._driver = None
+                del driver
+                gc.collect()
 
     # ------------------------------------------------------------------
     # Session helpers
@@ -271,6 +281,34 @@ class _Neo4jStyleAdapter(BaseGraphAdapter):
         if self._database:
             kwargs["database"] = self._database
         return self._driver.session(**kwargs)
+
+    def _execute_write_batch(self, cypher: str, rows: list[dict[str, Any]]) -> bool:
+        """Execute one write batch with a fresh, fully-consumed session.
+
+        A few Bolt endpoints have raised ``BufferError`` while a PackStream
+        buffer from a failed request was still exported.  Session scoping and
+        one new-driver retry release that buffer without hiding a persistent
+        failure from the benchmark.
+
+        Returns ``True`` when the one-time recovery path was used.
+        """
+        # Decouple the driver encoder from the CSV reader's dictionaries.
+        payload = [dict(row) for row in rows]
+        for attempt in range(2):
+            try:
+                with self._session() as session:
+                    session.run(cypher, rows=payload).consume()
+                return attempt == 1
+            except BufferError:
+                if attempt:
+                    raise
+                logger.warning(
+                    "[%s] Bolt buffer export detected; reconnecting once and retrying batch",
+                    self.platform_name,
+                )
+                self._safe_close_driver()
+                self.connect()
+        raise AssertionError("unreachable")
 
     # ------------------------------------------------------------------
     # Data management
@@ -344,15 +382,15 @@ class _Neo4jStyleAdapter(BaseGraphAdapter):
             u.reputation_score = toFloat(row.reputation_score),
             u.created_at = row.created_at
         """
-        with self._session() as s:
-            for chunk in _chunked(nodes, batch_size):
-                try:
-                    s.run(node_cypher, rows=chunk).consume()
-                except TransientError as exc:
-                    caveats.append(f"Node-batch transient retry not implemented: {exc.message}")
-                    raise
-                node_count += len(chunk)
-                batches_processed += 1
+        for chunk in _chunked(nodes, batch_size):
+            try:
+                if self._execute_write_batch(node_cypher, chunk):
+                    caveats.append("Node batch recovered after Bolt BufferError")
+            except TransientError as exc:
+                caveats.append(f"Node-batch transient retry not implemented: {exc.message}")
+                raise
+            node_count += len(chunk)
+            batches_processed += 1
 
         # ---- Relationships ------------------------------------------------
         rel_cypher = """
@@ -368,22 +406,22 @@ class _Neo4jStyleAdapter(BaseGraphAdapter):
             per_type: dict[str, list[dict[str, Any]]] = {}
             for r in chunk:
                 per_type.setdefault(r.get("rel_type") or "RELATED", []).append(r)
-            with self._session() as s:
-                for rel_type, rows in per_type.items():
-                    sanitized = self._sanitize_rel_type(rel_type)
-                    stmt = (
-                        "UNWIND $rows AS row "
-                        "MATCH (s:User {id: row.source_id}) "
-                        "MATCH (t:User {id: row.target_id}) "
-                        f"MERGE (s)-[r:{sanitized}]->(t) "
-                        "SET r.weight = toFloat(row.weight), "
-                        "    r.timestamp = row.timestamp"
-                    )
-                    try:
-                        s.run(stmt, rows=rows).consume()
-                    except TransientError as exc:
-                        caveats.append(f"Rel-batch transient: {exc.message}")
-                        raise
+            for rel_type, rows in per_type.items():
+                sanitized = self._sanitize_rel_type(rel_type)
+                stmt = (
+                    "UNWIND $rows AS row "
+                    "MATCH (s:User {id: row.source_id}) "
+                    "MATCH (t:User {id: row.target_id}) "
+                    f"MERGE (s)-[r:{sanitized}]->(t) "
+                    "SET r.weight = toFloat(row.weight), "
+                    "    r.timestamp = row.timestamp"
+                )
+                try:
+                    if self._execute_write_batch(stmt, rows):
+                        caveats.append("Relationship batch recovered after Bolt BufferError")
+                except TransientError as exc:
+                    caveats.append(f"Rel-batch transient: {exc.message}")
+                    raise
             rel_count += len(chunk)
             batches_processed += 1
 
