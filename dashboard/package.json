@@ -4,8 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "sync-results": "node scripts/sync-results.mjs",
+    "dev": "npm run sync-results && vite",
+    "build": "npm run sync-results && vite build",
     "lint": "oxlint",
     "preview": "vite preview --host 127.0.0.1 --port 4173"
   },
