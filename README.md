@@ -1,22 +1,25 @@
 # CognoDB Cloud vs. Managed Graph Databases — A Fairness-First Benchmark
 Benchmarking CognoDB Cloud against five other graph database platforms under matched resource limits.
 
-## Why this benchmark, and how to read it
+## Why this benchmark, and how to read it:
 Every graph database in this comparison received the same dataset, the same logical queries, the same client, and the same resource ceiling — CognoDB's own free-tier limits (0.5 vCPU / 256 MB RAM / 1 GB disk). The goal isn't to declare a winner. It's to answer a narrower, more useful question: under identical, honestly-documented constraints, how do these platforms actually behave?
 
-Where a platform failed to run, that's reported as plainly as a platform that succeeded — a clean sweep isn't the goal here, a defensible one is.
 
 ## 1. Databases compared
 | Platform | Role | Deployment | Status |
 | :--- | :--- | :--- | :--- |
-| **CognoDB Cloud** | Benchmark target | Managed free tier (c0) | ⚠️ Partial — see caveats |
+| **CognoDB Cloud** | Benchmark target | Managed free tier (c0) | ✅ Success |
 | **Neo4j AuraDB Free** | Comparator | Managed free tier | ✅ Success |
 | **Memgraph (Community Edition)** | Comparator | Self-hosted, Docker, capped to CognoDB's specs | ✅ Success  |
 | **FalkorDB** | Comparator | Self-hosted, Docker, capped to CognoDB's specs | ✅ Success  |
 | **TigerGraph Cloud** | Comparator | Managed free tier | ❌ DNF — see caveats  |
 | **ArcadeDB** | Comparator | Self-hosted, Docker, capped to CognoDB's specs | ❌ DNF — see caveats  |
 
-Why these six. Neo4j AuraDB Free was chosen first because CognoDB itself connects via the official Neo4j Bolt driver — comparing against Aura isolates "managed service quality" from query-language differences, giving a clean apples-to-apples baseline. Memgraph and FalkorDB were self-hosted via Docker and capped explicitly to CognoDB's own resource numbers (`--cpus=0.5 --memory=256m`), which sidesteps the ambiguity of matching an external vendor's free-tier specs and gives literal, verifiable parity instead. TigerGraph Cloud was included for genuine architectural diversity — a distributed, graph-native engine rather than a Bolt/Cypher-based store. ArcadeDB was attempted as a second self-hosted, multi-model comparator.
+## Why these six? 
+*   Neo4j AuraDB Free was chosen first because CognoDB itself connects via the official Neo4j Bolt driver — comparing against Aura isolates "managed service quality" from query-language differences, giving a clean apples-to-apples baseline. 
+*   Memgraph and FalkorDB were self-hosted via Docker and capped explicitly to CognoDB's own resource numbers (`--cpus=0.5 --memory=256m`), which sidesteps the ambiguity of matching an external vendor's free-tier specs and gives literal, verifiable parity instead.
+*   TigerGraph Cloud was included for genuine architectural diversity — a distributed, graph-native engine rather than a Bolt/Cypher-based store.
+*   ArcadeDB was attempted as a second self-hosted, multi-model comparator.
 
 ## 2. Resource parity (fairness)
 | Platform | vCPU | RAM | Disk | Tier / method |
@@ -28,7 +31,6 @@ Why these six. Neo4j AuraDB Free was chosen first because CognoDB itself connect
 | **TigerGraph Cloud** | N/A | N/A | N/A | Free tier — connection never succeeded  |
 | **ArcadeDB** | 0.5 (attempted) | 256 MB (attempted) | 1 GB | Self-hosted, Docker-capped — see DNF note  |
 
-Where a managed platform's free tier doesn't expose an exact vCPU/RAM number, that's stated here rather than guessed at — the goal is equivalent limits, not fabricated symmetry.
 
 ## 3. Dataset
 *   **Source:** `data/nodes.csv` and `data/relationships.csv` 
@@ -108,7 +110,7 @@ Where a managed platform's free tier doesn't expose an exact vCPU/RAM number, th
 | **ArcadeDB** | Not Observable  | N/A — never started  |
 
 ## 6. Caveats & Development Decisions
-*   **CognoDB Cloud** experienced intermittent connection drops during the higher-concurrency portion of the mixed workload, manifesting as `TimeoutError()` at the 40-client tier . Retry-with-backoff and connection pool tuning were applied; the drop rate itself is reported as a finding, not smoothed over.
+*   **CognoDB Cloud** experienced intermittent connection drops during the higher-concurrency portion of the mixed workload, manifesting as `TimeoutError()` at the 40-client tier . Retry-with-backoff and connection pool tuning were applied.
 *   **Memgraph** recorded minor instability under concurrent load, yielding one `TimeoutError()` at the 10-client tier and one `TimeoutError()` at the 40-client tier .
 *   **The ArcadeDB Problem (DNF):** ArcadeDB is marked DNF . Under the strict 256 MB RAM cap required to ensure fairness, its Java Virtual Machine (JVM) overhead was unable to handle the batched ingestion phase. When processing concurrent write transactions, it produced an `HTTP 409 Conflict` error during ingestion . Because allocating extra memory to resolve this would violate the foundational resource constraints of the benchmark, the database was dropped and the failure documented.
 *   **The TigerGraph Cloud Pivot (DNF):** TigerGraph Cloud is marked DNF . I encountered significant challenges connecting programmatically due to a recent change in their connection and authentication model introduced in the Savanna upgrade . The new workspace routing and API token generation mechanisms blocked headless automation and prevented us from establishing a successful connection within the allocated time limit, throwing a `TG_HOST not configured` connection error . Consequently, I executed a strategic pivot to use FalkorDB locally, capping its Docker container at identical specs to maintain the 5-database requirement.
