@@ -544,6 +544,76 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def build_dev_log(
+    platforms: list[dict[str, Any]], dataset_info: dict[str, Any]
+) -> list[dict[str, str]]:
+    """Build the decisions panel content from the outcome of this run."""
+    entries: list[dict[str, str]] = []
+    for record in platforms:
+        name = str(record.get("name") or record.get("platform") or "Database")
+        status = str(record.get("status") or "").lower()
+        note = str(record.get("status_note") or "").strip()
+        caveats = "; ".join(str(item) for item in record.get("caveats", []))
+        body = " ".join(part for part in (note, caveats) if part).strip()
+
+        if status in {"skipped", "dnf"}:
+            entries.append({
+                "title": f"Why {name} is marked DNF",
+                "body": body or "The platform did not complete this benchmark run.",
+            })
+        elif status == "partial":
+            entries.append({
+                "title": f"{name} — partial result",
+                "body": body or "The platform completed only part of this benchmark run.",
+            })
+
+    succeeded = [
+        str(record.get("name") or record.get("platform"))
+        for record in platforms
+        if str(record.get("status", "")).lower() in {"ok", "success"}
+    ]
+    entries.append({
+        "title": "Comparators used in this run",
+        "body": (
+            f"Fully successful: {', '.join(succeeded) or 'none'}. "
+            f"Dataset: {dataset_info.get('nodes', 0):,} nodes, "
+            f"{dataset_info.get('relationships', 0):,} relationships from "
+            f"{dataset_info.get('source', 'the local benchmark dataset')}."
+        ),
+    })
+    return entries
+
+
+def build_raw_run_log(
+    platforms: list[dict[str, Any]], timestamp: str
+) -> list[dict[str, str]]:
+    """Serialise recorded run outcomes into the dashboard's log-table shape."""
+    rows: list[dict[str, str]] = []
+    for record in platforms:
+        database = str(record.get("name") or record.get("platform") or "Database")
+        rows.append({
+            "timestamp": timestamp,
+            "db": database,
+            "event": "Connection",
+            "status": "success" if record.get("connect_ok") else "failed",
+        })
+        if record.get("ingest"):
+            rows.append({
+                "timestamp": timestamp,
+                "db": database,
+                "event": "Data ingestion",
+                "status": str(record.get("status", "unknown")),
+            })
+        for sweep in record.get("concurrency", []):
+            rows.append({
+                "timestamp": timestamp,
+                "db": database,
+                "event": f"Concurrency sweep: {sweep.get('clients', 0)} clients",
+                "status": "success" if not sweep.get("errors") else f"{sweep['errors']} errors",
+            })
+    return rows
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     load_dotenv(ROOT / ".env")
@@ -559,6 +629,7 @@ def main(argv: list[str] | None = None) -> int:
         "dataset": {
             "nodes": len(nodes),
             "relationships": len(rels),
+            "source": "data/nodes.csv + data/relationships.csv",
             "nodes_csv": str(NODES_CSV),
             "relationships_csv": str(RELS_CSV),
         },
@@ -569,6 +640,11 @@ def main(argv: list[str] | None = None) -> int:
     for name in args.platforms:
         rec = _benchmark_platform(name, nodes, rels, tunables)
         results["platforms"].append(rec)
+
+    results["dev_log"] = build_dev_log(results["platforms"], results["dataset"])
+    results["raw_run_log"] = build_raw_run_log(
+        results["platforms"], results["generated_at"]
+    )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("w", encoding="utf-8") as fh:

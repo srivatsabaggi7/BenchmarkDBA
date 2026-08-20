@@ -252,11 +252,34 @@ class FalkorDBAdapter(BaseGraphAdapter):
         )
         return True
 
-    def get_footprint(self) -> str:
+    def get_footprint(self) -> str | dict[str, Any]:
+        """Capture FalkorDB's Redis-reported resident memory usage.
+
+        Redis exposes memory directly through ``INFO memory``.  This is a
+        runtime-memory observation, not an on-disk storage measurement.
+        """
         try:
             if self._db is None:
                 return "Not Observable"
-            info = self._db.info()
-            return str(info) if info else "Not Observable"
-        except Exception:
-            return "Not Observable"
+            try:
+                info = self._db.info("memory")
+            except TypeError:
+                # Older client versions expose only the unsectioned INFO API.
+                info = self._db.info()
+            if not isinstance(info, dict):
+                return "Not Observable"
+
+            used_bytes = info.get("used_memory")
+            if used_bytes is not None:
+                return {
+                    "storage_mb": None,
+                    "memory_mb": round(int(used_bytes) / (1024 * 1024), 2),
+                    "memory_human": info.get("used_memory_human"),
+                    "notes": (
+                        "Redis INFO memory queried through the FalkorDB "
+                        "client; this is resident memory, not disk storage."
+                    ),
+                }
+        except Exception as exc:
+            logger.warning("[FalkorDB] footprint observation failed: %s", exc)
+        return "Not Observable"

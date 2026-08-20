@@ -276,8 +276,13 @@ class BaseGraphAdapter(ABC):
     # ------------------------------------------------------------------
 
     @abstractmethod
-    def get_footprint(self) -> str:
-        """Human readable disk/memory footprint or ``"Not Observable"``."""
+    def get_footprint(self) -> str | dict[str, Any]:
+        """Return footprint data, or ``"Not Observable"`` when unavailable.
+
+        Structured values use ``storage_mb`` and/or ``memory_mb`` plus a
+        ``notes`` field so callers never mistake a proxy for a byte-size
+        measurement.
+        """
 
     # ------------------------------------------------------------------
     # Shared helpers (harness-facing utility wrappers)

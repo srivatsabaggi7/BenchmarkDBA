@@ -24,6 +24,7 @@ SUPPORTED_PLATFORMS: tuple[str, ...] = (
     "Memgraph",
     "TigerGraph",
     "ArcadeDB",
+    "FalkorDB",
 )
 
 
@@ -52,6 +53,7 @@ class AdapterFactory:
             "memgraph": cls._build_memgraph,
             "tigergraph": cls._build_tigergraph,
             "arcadedb": cls._build_arcadedb,
+            "falkordb": cls._build_falkordb,
         }
         if platform not in constructors:
             raise ValueError(
@@ -119,4 +121,14 @@ class AdapterFactory:
             graph_name=os.getenv("ARCADEDB_GRAPH_NAME", "BenchmarkGraph"),
             username=os.getenv("ARCADEDB_USERNAME", "root"),
             password=os.getenv("ARCADEDB_PASSWORD", ""),
+        )
+
+    @classmethod
+    def _build_falkordb(cls) -> BaseGraphAdapter:
+        from .falkordb_adapter import FalkorDBAdapter
+
+        return FalkorDBAdapter(
+            host=os.getenv("FALKORDB_HOST", "localhost"),
+            port=int(os.getenv("FALKORDB_PORT", "6379")),
+            graphname=os.getenv("FALKORDB_GRAPHNAME", "BenchmarkGraph"),
         )
