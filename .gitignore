@@ -1,0 +1,92 @@
+# ============================================================
+# Environment & secrets (CRITICAL — never commit)
+# ============================================================
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# ============================================================
+# Benchmark output (generated, can be re-created)
+# ============================================================
+benchmark_results.json
+*.jsonl
+*.log
+
+# ============================================================
+# Data files (keep template in repo? No — user said
+# ./data/ holds the pre-generated dataset locally.)
+# ============================================================
+data/*
+# If you want a placeholder so the folder exists on clone:
+# Add a data/.gitkeep after confirming
+!.gitkeep
+
+# ============================================================
+# Python caches & virtualenvs
+# ============================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+pip-wheel-metadata/
+
+# Virtualenvs (common names)
+.venv/
+venv/
+ENV/
+env/
+.python-version
+
+# pytest / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+noxfile.py
+
+# IPython / Jupyter
+.ipynb_checkpoints
+.ipython
+.profile_default
+
+# mypy / ruff / linters
+.mypy_cache/
+.ruff_cache/
+.dmypy.json
+dmypy.json
+
+# ============================================================
+# Streamlit
+# ============================================================
+.streamlit/secrets.toml
+
+# ============================================================
+# OS / Editor
+# ============================================================
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+*.swp
+*.swo
